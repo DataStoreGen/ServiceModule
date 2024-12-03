@@ -1,10 +1,12 @@
--- want new features dm me @bela_dimitrescu1940 on discord
+--want new features just dm @bela_dimitrescu1940 on Discord or bugs also just dm me
 local Services = {}
 local DataStoreService = game:GetService('DataStoreService')
 local CollectionService = game:GetService('CollectionService')
 local HttpService = game:GetService('HttpService')
 local RunService = game:GetService('RunService')
 local Players = game:GetService('Players')
+local MessagingService = game:GetService('MessagingService')
+
 local eventListen = {}
 local asyncQueue = {}
 local queueMutex = false
@@ -222,6 +224,360 @@ function Services.Players()
 	
 	function events:PlayerRemoving(callBack: (player: Player) -> RBXScriptSignal)
 		return self.Players.PlayerRemoving:Connect(callBack)
+	end
+	
+	return events.new()
+end
+
+function Services.Collection()
+	local events = {}
+	events.__index = events
+	
+	function events.new()
+		local self = {
+			CollectionService = CollectionService
+		}
+		setmetatable(self, events)
+		return self
+	end
+	
+	function events:AddTag(objectName: string, tag: any)
+		if not self.CollectionService:HasTag(objectName, tag) then
+			self.CollectionService:AddTag(objectName, tag)
+		end
+	end
+	
+	function events:RemoteTag(objectName: string, tag: any)
+		if self.CollectionService:HasTag(objectName, tag) then
+			self.CollectionService:RemoveTag(objectName, tag)
+		end
+	end
+	
+	function events:GetTagged(tag: string)
+		return self.CollectionService:GetTagged(tag)
+	end
+	
+	function events:ConnectTags(tag: string, callBack: (object: Instance) -> ())
+		self.CollectionService:GetInstanceAddedSignal(tag):Connect(callBack)
+		self.CollectionService:GetInstanceRemovedSignal(tag):Connect(function(object)
+			logMessage('Info', string.format(`Object: {'%s'} removed from tag: {'%s'}`, object.Name, tag))
+		end)
+	end
+	
+	return events.new()
+end
+
+function Services.Number()
+	local events = {}
+	events.__index = events
+	local first = {"", "U","D","T","Qd","Qn","Sx","Sp","Oc","No"}
+	local second = {"", "De","Vt","Tg","qg","Qg","sg","Sg","Og","Ng"}
+	local third = {'', 'Ce'}
+
+	function events.eq(val1: number, val2: number)
+		return val1 == val2
+	end
+
+	function events.me(val1: number, val2: number)
+		return val1 > val2
+	end
+
+	function events.le(val1: number, val2: number)
+		return val1 < val2
+	end
+
+	function events.meeq(val1: number, val2: number)
+		return (val1 > val2) or (val1 == val2)
+	end
+
+	function events.leeq(val1: number, val2: number)
+		return (val1 < val2) or (val1 == val2)
+	end
+
+	function events.floor(val1)
+		return math.floor(val1 * 100 + 0.001) / 100
+	end
+
+	function events.add(val1, val2, canRound: boolean?)
+		local value = val1+val2
+		if canRound then	return events.floor(value)	end
+		return value
+	end
+
+	function events.div(val1, val2, canRound: boolean?)
+		local value = val1/val2
+		if canRound then	return events.floor(value)end
+		return value
+	end
+
+	function events.mul(val1, val2, canRound: boolean?)
+		local value = val1*val2
+		if canRound then	return events.floor(value) end
+		return value
+	end
+
+	function events.sub(val1, val2, canRound: boolean?)
+		val1 = val1 - val2
+		if val1 <= 0 then return 0 end
+		if canRound then	return events.floor(val1) end
+		return val1
+	end
+
+	function events.log(value, canRound: boolean?)
+		value = math.log(value)
+		if canRound then	return events.floor(value) end
+		return value
+	end
+
+	function events.logx(val1, val2, canRound: boolean?)
+		local value = math.log(val1, val2)
+		if canRound then	return events.floor(value) end
+		return value
+	end
+
+	function events.log10(val1, canRound: boolean?)
+		return events.logx(val1, 10, canRound)
+	end
+
+	function events.pow(val1, val2, canRound: boolean?)
+		val1 = val1^val2
+		if canRound then return events.floor(val1) end return val1
+	end
+
+	function events.clamp(value: number, min: number, max: number)
+		if events.me(min, max) then min, max = max, min end
+		if events.le(value, min) then return min elseif events.me(value, max) then return max end
+		return value
+	end
+
+	function events.min(val1, val2)
+		return val1 < val2 and val1 or val2
+	end
+
+	function events.max(val1, val2)
+		return val1 > val2 and val1 or val2
+	end
+
+	function events.mod(val1, val2, canRound: boolean?)
+		local value = val1 % val2
+		if canRound then	return events.floor(value) end
+		return value
+	end
+
+	function events.factorial(val1)
+		if val1 == 0 then return 1 end
+		local result = 1
+		for i = 2, val1 do
+			result = result * i
+		end
+		return result
+	end
+
+	function events.Comma(value)
+		if value >= 1e3 then
+			value = math.floor(value)
+			local format = tostring(value)
+			format = format:reverse():gsub('(%d%d%d)', '%1,'):reverse()
+			if format:sub(1, 1) == ',' then format = format:sub(2) end return format
+		end
+		return value
+	end
+
+	function events.toTable(value)
+		if value == 0 then return {0, 0} end
+		local exp = math.floor(math.log10(math.abs(value)))
+		return {value / 10^exp, exp}
+	end
+
+	function events.toNumber(value)
+		return (value[1] * (10^value[2]))
+	end
+
+	function events.toNotation(value, canRound: boolean?)
+		local toTable = events.toTable(value)
+		local man, exp = toTable[1], toTable[2]
+		if canRound then	return events.floor(man) .. 'e' .. exp end
+		return man .. 'e' .. exp
+	end
+
+	local function suffixPart(index)
+		local hun = math.floor(index/100)
+		index = index%100
+		local ten, one = math.floor(index/10), index % 10
+		return (first[one+1] or '') ..(second[ten+1] or '') .. (third[hun+1] or '')
+	end
+
+	function events.short(value)
+		local toTable = events.toTable(value)
+		local exp, man = toTable[2], toTable[1]
+		if exp < 3 then return math.floor(value * 100 + 0.001)/100 end
+		local ind = math.floor(exp/3)-1
+		if ind > 101 then return 'inf' end
+		local rm = exp%3
+		man = math.floor(man*10^rm * 100 + 0.001) / 100
+		if ind == 0 then
+			return man .. 'k'
+		elseif ind == 1 then
+			return man ..'m'
+		elseif ind == 2 then
+			return man .. 'b'
+		end
+		return man .. suffixPart(ind)
+	end
+
+	function events.shortE(value: number, canRound: boolean?, canNotation: number?): 'Notation will automatic preset but if u want one smaller do it as 1e3'
+		canNotation = canNotation or 1e6
+		if math.abs(value) >= canNotation then return events.toNotation(value, canRound):gsub('nane','')	end
+		return events.short(value)
+	end
+
+	function events.maxBuy(c, b, r, k)
+		local en = events
+		local max = en.div(math.log(en.add(en.div(en.mul(c , en.sub(r , 1)) , en.mul(b , en.pow(r,k))) , 1)) , en.log(r))
+		local cost =  en.mul(b , en.div(en.mul(en.pow(r,k) , en.sub(en.pow(r,max) , 1)), en.sub(r , 1)))
+		local nextCost = en.mul(b, en.pow(r,max))
+		return max, cost, nextCost
+	end
+
+	function events.CorrectTime(value: number)
+		local days = math.floor(value / 86400)
+		local hours = math.floor((value % 86400) / 3600)
+		local minutes = math.floor((value % 3600) / 60)
+		local seconds = value % 60
+		local result = ""
+		local function appendTime(unit, label)
+			if unit > 0 then	result = result .. string.format(':%d%s', unit, label)	end
+		end
+		if days > 0 then
+			result = string.format('%dd', days) appendTime(hours, 'h')	appendTime(minutes, 'm') appendTime(seconds, 's') 
+		elseif hours > 0 then
+			result = string.format('%dh', hours)	appendTime(minutes, 'm') appendTime(seconds, 's')
+		elseif minutes > 0 then
+			result = string.format('%dm', minutes) 	appendTime(seconds, 's')
+		else
+			result = string.format('%ds', seconds)
+		end
+		return result
+	end
+
+	function events.percent(part, total, canRound: boolean?)
+		local value = (part / total) * 100
+		if canRound then	return events.floor(value) end
+		if value < 0.001 then return '0%' end
+		return value .. '%'
+	end
+
+	function events.Changed(value, callBack: (property: string) -> ())
+		value.Changed:Connect(callBack)
+	end
+
+	function events.Concat(value, canRound: boolean?, canNotation: number?)
+		canNotation = canNotation or 1e6
+		if value >= canNotation then return events.shortE(value, canRound, canNotation) end
+		return events.Comma(value)
+	end
+
+	function events.lbencode(value)
+		local toTable = events.toTable(value)
+		local man, exp = toTable[1], toTable[2]
+		if man == 0 then return 4e18 end
+		local mode = 0
+		if man < 0 then
+			mode = 1
+		elseif man > 0 then
+			mode = 2
+		end
+		local val = mode * 1e18
+		if mode == 2 then
+			val += (exp * 1e14) + (math.log10(math.abs(man))*1e13)
+		elseif mode == 1 then
+			val += (exp * 1e14) + (math.log10(math.abs(man))*1e13)
+			val = 1e17 - val
+		end
+		return val
+	end
+
+	function events.lbdecode(value)
+		if value == 4e18 then return {0,0} end
+		local mode = math.floor(value/1e18)
+		if mode == 1 then
+			local v = 1e18 - value
+			local exp = math.floor(v/1e14)
+			local man = 10^((v%1e14)/1e13)
+			return events.toNumber({-man, exp})
+		elseif mode == 2 then
+			local v = value - 2e18
+			local exp = math.floor(v/1e14)
+			local man = 10^((v%1e14)/1e13)
+			return events.toNumber({man, exp})
+		end
+	end
+
+	function events.GetValue(valueName, Player: Player)
+		local class = {}
+		for _, values in pairs(Player:GetDescendants()) do
+			if values:IsA('ValueBase') and values.Name == valueName and values.Name ~= 'BoundKeys' then
+				class.Name = values.Name :: string
+				class.Value = values.Value :: number
+				class.Parent = values.Parent :: Instance
+			end
+		end
+		return class
+	end
+
+	function events.Roman(value)
+		local toRoman = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1}
+		local suffix = {"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"}
+		local rom = ''
+		for i, val in ipairs(toRoman) do
+			while events.meeq(value, val) do
+				rom = rom .. suffix[i]
+				value = value - val
+			end
+		end
+		return rom
+	end
+
+	function events.getCurrentData(value, oldValue)
+		local new = value
+		if oldValue then
+			local old = events.lbdecode(oldValue)
+			new = events.max(new, old)
+		end
+		return events.lbencode(new)
+	end
+
+	return events
+end
+
+function Services.Messaging()
+	local events = {}
+	events.__index = events
+	
+	function events.new()
+		local self = {
+			MessagingService = MessagingService
+		}
+		setmetatable(self, events)
+		return self
+	end
+	
+	function events:PublishMessage(topic: string, message: any)
+		local success, err = pcall(function()
+			self.MessagingService:PublishAsync(topic, message)
+		end)
+		if not success then
+			logMessage('Error', `Failed to publish message to topic {topic}: {err}`)
+		end
+	end
+	
+	function events:SubscribeToTopic(topic: string, callBack: (message: any) ->())
+		local success, err = pcall(function()
+			return self.MessagingService:SubscribeAsync(topic, callBack)
+		end)
+		if not success then
+			logMessage('Error', `Failed to subscribe to topic {topic}: {err}`)
+		end
 	end
 	
 	return events.new()
