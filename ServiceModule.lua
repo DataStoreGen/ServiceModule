@@ -1,4 +1,3 @@
---want new features just dm @bela_dimitrescu1940 on Discord or bugs also just dm me
 local Services = {}
 local DataStoreService = game:GetService('DataStoreService')
 local CollectionService = game:GetService('CollectionService')
@@ -27,7 +26,7 @@ end
 
 function logMessage(level, message)
 	if level == 'Error' or config.logLevel == 'Debug' or (config.logLevel == 'Info' and level ~= 'Debug') then
-		local levelMessage = string.format('[DataStoreModule] [%s] %s', level, message)
+		local levelMessage = string.format('[ServiceModule] [%s] %s', level, message)
 		if level == 'Error' then
 			error(levelMessage)
 		elseif level == 'Warn' then
@@ -224,6 +223,10 @@ function Services.Players()
 	
 	function events:PlayerRemoving(callBack: (player: Player) -> RBXScriptSignal)
 		return self.Players.PlayerRemoving:Connect(callBack)
+	end
+	
+	function events:GetPlayers()
+		return self.Players:GetPlayers()
 	end
 	
 	return events.new()
