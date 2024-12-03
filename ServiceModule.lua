@@ -5,6 +5,7 @@ local HttpService = game:GetService('HttpService')
 local RunService = game:GetService('RunService')
 local Players = game:GetService('Players')
 local MessagingService = game:GetService('MessagingService')
+local ReplicatedStorage = game:GetService('ReplicatedStorage')
 
 local eventListen = {}
 local asyncQueue = {}
@@ -225,8 +226,13 @@ function Services.Players()
 		return self.Players.PlayerRemoving:Connect(callBack)
 	end
 	
-	function events:GetPlayers()
+	function events:GetPlayers(): {Players}
 		return self.Players:GetPlayers()
+	end
+	
+	function events:GetAllPlayers(): number
+		local players = self:GetPlayers()
+		return #players
 	end
 	
 	return events.new()
@@ -584,6 +590,48 @@ function Services.Messaging()
 	end
 	
 	return events.new()
+end
+
+function Services.Remotes()
+	local events = {}
+	events.__index = events
+	
+	function events.new(Replicated: ReplicatedStorage)
+		local self = {
+			RemoteEvents = {},
+			RemoteFunction = {}
+		}
+		for _, event in pairs(Replicated:GetDescendants()) do
+			if event:IsA('RemoteEvent') then
+				self.RemoteEvents[event.Name] = event
+			elseif event:IsA('RemoteFunction') then
+				self.RemoteFunction[event.Name] = event
+			end
+		end
+		export type RemoteEvent = typeof(self.RemoteEvents)
+		setmetatable(self, events)
+		return self
+	end
+	
+	function events:GetRemoteEvent(remoteName: string)
+		return self.RemoteEvent[remoteName]
+	end
+	
+	function events:OnServerEvent(remoteName: string, func: (player: Player, ...any) -> ())
+		local event = self:GetRemoteEvent(remoteName)
+		return event.OnServerEvent:Connect(func)
+	end
+	
+	function events:GetRemoteFunction(remoteName: string)
+		return self.RemoteFunction[remoteName]
+	end
+	
+	function events:OnServerInvoke(remoteName: string, func: (player: Player, ...any) -> ())
+		local event = self:GetRemoteFunction(remoteName)
+		event.OnServerInvoke = func
+	end
+	
+	return events.new(ReplicatedStorage)
 end
 
 return Services
