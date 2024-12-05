@@ -120,7 +120,6 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 	end
 	
 	function events:SetAsync(player: Player, data: any, canBindData: boolean?, userids: {any}?, options: DataStoreSetOptions?)
-		local playerName = Players:GetNameFromUserIdAsync(player)
 		local encode = HttpService:JSONEncode(data)
 		local success, err
 		repeat
@@ -132,9 +131,9 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 			end)
 		until success
 		if not success then
-			logMessage('Warn', `{playerName} data was not successfully saved, {err}`)
+			logMessage('Warn', `{Players:GetNameFromUserIdAsync(player)} data was not successfully saved, {err}`)
 		else
-			logMessage('Warn', `{playerName} data was successfully saved`)
+			logMessage('Warn', `{Players:GetNameFromUserIdAsync(player)} data was successfully saved`)
 		end
 	end
 	
@@ -608,13 +607,13 @@ function Services.Remotes()
 				self.RemoteFunction[event.Name] = event
 			end
 		end
-		export type RemoteEvent = typeof(self.RemoteEvents)
 		setmetatable(self, events)
 		return self
 	end
 	
 	function events:GetRemoteEvent(remoteName: string)
-		return self.RemoteEvent[remoteName]
+		local event = self.RemoteEvents[remoteName]
+		return self.RemoteEvents[remoteName]
 	end
 	
 	function events:OnServerEvent(remoteName: string, func: (player: Player, ...any) -> ())
