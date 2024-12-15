@@ -84,6 +84,32 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 	local DataStore = DataStoreService:GetDataStore(dataName, dataScope, option)
 	local events = {}
 	events.__index = events
+	local ActiveSession = {}
+	local ConflictTimer = {}
+	
+	local function IsLocked(player: Player)
+		return ActiveSession[player.UserId] ~= nil
+	end
+	
+	local function LockSession(player: Player)
+		if IsLocked(player) then
+			error('Players data is locked by another session')
+		end
+		ActiveSession[player.UserId] = os.time()
+	end
+	
+	local function UnlockSession(player: Player)
+		ActiveSession[player.UserId] = nil
+		ConflictTimer[player.UserId] = nil
+	end
+	
+	local function HandleSession(player: Player)
+		local conflict = ConflictTimer[player.UserId] or os.time()
+		ConflictTimer[player.UserId] = conflict
+		if os.time() - conflict >= 60 then
+			player:Kick('Session is already active in another game. Please rejoin')
+		end
+	end
 	
 	function events.new()
 		local self = {
@@ -93,14 +119,20 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 		setmetatable(self, events)
 		return self
 	end
-	
+
 	function events:GetAsync(player: Player, warnMessage: string?)
+		if IsLocked(player) then
+			HandleSession(player)
+			return nil
+		end
+		LockSession(player)
 		local playerName = Players:GetNameFromUserIdAsync(player)
 		local success, data = pcall(function()
 			return retryAsync(function()
 				return self.DataStore:GetAsync(player)
 			end)
 		end)
+		UnlockSession(player)
 		if not success then player:Kick(warnMessage) else
 			logMessage('Warn', `{playerName}, your data was successfully restored`)
 		end
@@ -110,7 +142,7 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 		end
 		return decode
 	end
-	
+
 	function events:GetBudgetRequests(BudgetType: Enum.DataStoreRequestType)
 		local current = self.DataStoreService:GetRequestBudgetForRequestType(BudgetType)
 		while current < 1 do
@@ -118,8 +150,13 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 			current = self.DataStoreService:GetRequestBudgetForRequestType(BudgetType)
 		end
 	end
-	
+
 	function events:SetAsync(player: Player, data: any, canBindData: boolean?, userids: {any}?, options: DataStoreSetOptions?)
+		if IsLocked(player) then
+			HandleSession(player)
+			return false
+		end
+		LockSession(player)
 		local encode = HttpService:JSONEncode(data)
 		local success, err
 		repeat
@@ -130,17 +167,23 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 				end)
 			end)
 		until success
+		UnlockSession(player)
 		if not success then
 			logMessage('Warn', `{Players:GetNameFromUserIdAsync(player)} data was not successfully saved, {err}`)
 		else
 			logMessage('Warn', `{Players:GetNameFromUserIdAsync(player)} data was successfully saved`)
 		end
 	end
-	
+
 	function events:UpdateAsync(player: Player, transform: (oldData: any) -> (), canBindData: boolean?)
+		if IsLocked(player) then
+			HandleSession(player)
+			return false
+		end
+		LockSession(player)
 		local success, err
 		repeat
-			if not canBindData then self:BindData(Enum.DataStoreRequestType.UpdateAsync) end
+			if not canBindData then self:GetBudgetRequests(Enum.DataStoreRequestType.UpdateAsync) end
 			success, err = pcall(function()
 				return enqueueAsync(function()
 					retryAsync(function()
@@ -153,15 +196,16 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 				end)
 			end)
 		until success
+		UnlockSession(player)
 		if not success then
 			logMessage('Warn', `Failed to Update data to: {player.Name}`)
 		end
 	end
-	
+
 	function events:RemoveAsync(player: Player)
 		return self.DataStore:RemoveAsync(player)
 	end
-	
+
 	function events:BindDataOnUpdate(canBind: boolean?)
 		canBind = canBind or false
 		if canBind then
@@ -181,7 +225,7 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 			end)
 		end
 	end
-	
+
 	function events:BindDataOnSet(canBind: boolean?)
 		canBind = canBind or false
 		if canBind then
@@ -208,7 +252,7 @@ end
 function Services.Players()
 	local events = {}
 	events.__index = events
-	
+
 	function events.new()
 		local self = {
 			Players = Players
@@ -216,31 +260,31 @@ function Services.Players()
 		setmetatable(self, events)
 		return self
 	end
-	
+
 	function events:PlayerAdded(callBack: (player: Player) -> RBXScriptSignal)
 		return self.Players.PlayerAdded:Connect(callBack)
 	end
-	
+
 	function events:PlayerRemoving(callBack: (player: Player) -> RBXScriptSignal)
 		return self.Players.PlayerRemoving:Connect(callBack)
 	end
-	
+
 	function events:GetPlayers(): {Players}
 		return self.Players:GetPlayers()
 	end
-	
+
 	function events:GetAllPlayers(): number
 		local players = self:GetPlayers()
 		return #players
 	end
-	
+
 	return events.new()
 end
 
 function Services.Collection()
 	local events = {}
 	events.__index = events
-	
+
 	function events.new()
 		local self = {
 			CollectionService = CollectionService
@@ -248,30 +292,30 @@ function Services.Collection()
 		setmetatable(self, events)
 		return self
 	end
-	
+
 	function events:AddTag(objectName: string, tag: any)
 		if not self.CollectionService:HasTag(objectName, tag) then
 			self.CollectionService:AddTag(objectName, tag)
 		end
 	end
-	
+
 	function events:RemoteTag(objectName: string, tag: any)
 		if self.CollectionService:HasTag(objectName, tag) then
 			self.CollectionService:RemoveTag(objectName, tag)
 		end
 	end
-	
+
 	function events:GetTagged(tag: string)
 		return self.CollectionService:GetTagged(tag)
 	end
-	
+
 	function events:ConnectTags(tag: string, callBack: (object: Instance) -> ())
 		self.CollectionService:GetInstanceAddedSignal(tag):Connect(callBack)
 		self.CollectionService:GetInstanceRemovedSignal(tag):Connect(function(object)
 			logMessage('Info', string.format(`Object: {'%s'} removed from tag: {'%s'}`, object.Name, tag))
 		end)
 	end
-	
+
 	return events.new()
 end
 
@@ -561,7 +605,7 @@ end
 function Services.Messaging()
 	local events = {}
 	events.__index = events
-	
+
 	function events.new()
 		local self = {
 			MessagingService = MessagingService
@@ -569,7 +613,7 @@ function Services.Messaging()
 		setmetatable(self, events)
 		return self
 	end
-	
+
 	function events:PublishMessage(topic: string, message: any)
 		local success, err = pcall(function()
 			self.MessagingService:PublishAsync(topic, message)
@@ -578,7 +622,7 @@ function Services.Messaging()
 			logMessage('Error', `Failed to publish message to topic {topic}: {err}`)
 		end
 	end
-	
+
 	function events:SubscribeToTopic(topic: string, callBack: (message: any) ->())
 		local success, err = pcall(function()
 			return self.MessagingService:SubscribeAsync(topic, callBack)
@@ -587,14 +631,14 @@ function Services.Messaging()
 			logMessage('Error', `Failed to subscribe to topic {topic}: {err}`)
 		end
 	end
-	
+
 	return events.new()
 end
 
 function Services.Remotes()
 	local events = {}
 	events.__index = events
-	
+
 	function events.new(Replicated: ReplicatedStorage)
 		local self = {
 			RemoteEvents = {},
@@ -610,26 +654,26 @@ function Services.Remotes()
 		setmetatable(self, events)
 		return self
 	end
-	
+
 	function events:GetRemoteEvent(remoteName: string)
 		local event = self.RemoteEvents[remoteName]
 		return self.RemoteEvents[remoteName]
 	end
-	
+
 	function events:OnServerEvent(remoteName: string, func: (player: Player, ...any) -> ())
 		local event = self:GetRemoteEvent(remoteName)
 		return event.OnServerEvent:Connect(func)
 	end
-	
+
 	function events:GetRemoteFunction(remoteName: string)
 		return self.RemoteFunction[remoteName]
 	end
-	
+
 	function events:OnServerInvoke(remoteName: string, func: (player: Player, ...any) -> ())
 		local event = self:GetRemoteFunction(remoteName)
 		event.OnServerInvoke = func
 	end
-	
+
 	return events.new(ReplicatedStorage)
 end
 
