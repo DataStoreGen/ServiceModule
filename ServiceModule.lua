@@ -1,4 +1,6 @@
-local Services = {}
+local Services = {
+	Session = {}
+}
 local DataStoreService = game:GetService('DataStoreService')
 local CollectionService = game:GetService('CollectionService')
 local HttpService = game:GetService('HttpService')
@@ -88,24 +90,24 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 	local ConflictTimer = {}
 	
 	local function IsLocked(player: Player)
-		return ActiveSession[player.UserId] ~= nil
+		return ActiveSession[player] ~= nil
 	end
 	
 	local function LockSession(player: Player)
 		if IsLocked(player) then
 			error('Players data is locked by another session')
 		end
-		ActiveSession[player.UserId] = os.time()
+		ActiveSession[player] = os.time()
 	end
 	
 	local function UnlockSession(player: Player)
-		ActiveSession[player.UserId] = nil
-		ConflictTimer[player.UserId] = nil
+		ActiveSession[player] = nil
+		ConflictTimer[player] = nil
 	end
 	
 	local function HandleSession(player: Player)
-		local conflict = ConflictTimer[player.UserId] or os.time()
-		ConflictTimer[player.UserId] = conflict
+		local conflict = ConflictTimer[player] or os.time()
+		ConflictTimer[player] = conflict
 		if os.time() - conflict >= 60 then
 			player:Kick('Session is already active in another game. Please rejoin')
 		end
@@ -132,9 +134,9 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 				return self.DataStore:GetAsync(player)
 			end)
 		end)
-		UnlockSession(player)
 		if not success then player:Kick(warnMessage) else
 			logMessage('Warn', `{playerName}, your data was successfully restored`)
+			UnlockSession(player)
 		end
 		local decode
 		if data then
@@ -167,11 +169,12 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 				end)
 			end)
 		until success
-		UnlockSession(player)
+		local playerName = Players:GetNameFromUserIdAsync(player)
 		if not success then
-			logMessage('Warn', `{Players:GetNameFromUserIdAsync(player)} data was not successfully saved, {err}`)
+			logMessage('Warn', `{playerName} data was not successfully saved, {err}`)
 		else
-			logMessage('Warn', `{Players:GetNameFromUserIdAsync(player)} data was successfully saved`)
+			logMessage('Warn', `{playerName} data was successfully saved`)
+			UnlockSession(player)
 		end
 	end
 
@@ -196,9 +199,12 @@ function Services.DataStore(dataName: string?, dataScope: string?, option: Insta
 				end)
 			end)
 		until success
-		UnlockSession(player)
+		local playerName = Players:GetNameFromUserIdAsync(player)
 		if not success then
-			logMessage('Warn', `Failed to Update data to: {player.Name}`)
+			logMessage('Warn', `Failed to Update data to: {playerName}`)
+		else
+			UnlockSession(player)
+			logMessage('Warn', `Successfully saved data to: {playerName}`)
 		end
 	end
 
@@ -673,8 +679,30 @@ function Services.Remotes()
 		local event = self:GetRemoteFunction(remoteName)
 		event.OnServerInvoke = func
 	end
+	
+	function events:FireClient(remoteName: string, player: Player, ...: any)
+		local event = self:GetRemoteEvent(remoteName):: RemoteEvent
+		event:FireClient(player, ...)
+	end
+	
+	function events:FireAllClients<T...>(remoteName: string, ...: T...)
+		local event = self:GetRemoteEvent(remoteName)
+		event:FireAllClients(...)
+	end
 
 	return events.new(ReplicatedStorage)
+end
+
+function Services.GetData()
+	local events = {}
+	
+	function events.data(player: Player)
+		local session = Services.Session[player]
+		if not session then return end
+		return session
+	end
+	
+	return events
 end
 
 return Services
